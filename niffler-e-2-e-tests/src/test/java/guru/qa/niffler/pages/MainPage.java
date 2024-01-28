@@ -15,8 +15,7 @@ public class MainPage {
 
     @Step("Выбираем первый элемент в таблице расходов")
     public MainPage clickFirstElementInTable(String description) {
-        table
-                .$$("tr")
+        table.$$("tr")
                 .find(text(description))
                 .$$("td")
                 .first()
@@ -35,8 +34,7 @@ public class MainPage {
 
     @Step("Проверяем, что таблица расходов пустая")
     public MainPage spendingsTableShouldBeEmpty() {
-        table
-                .$$("tr")
+        table.$$("tr")
                 .shouldHave(size(0));
 
         return this;
