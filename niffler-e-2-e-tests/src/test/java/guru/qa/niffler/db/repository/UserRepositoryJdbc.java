@@ -3,6 +3,7 @@ package guru.qa.niffler.db.repository;
 import guru.qa.niffler.db.DataSourceProvider;
 import guru.qa.niffler.db.JdbcUrl;
 import guru.qa.niffler.db.model.Authority;
+import guru.qa.niffler.db.model.CurrencyValues;
 import guru.qa.niffler.db.model.UserAuthEntity;
 import guru.qa.niffler.db.model.UserEntity;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
@@ -107,11 +108,196 @@ public class UserRepositoryJdbc implements UserRepository {
 
   @Override
   public void deleteInAuthById(UUID id) {
+    try (Connection conn = authDs.getConnection()) {
+      conn.setAutoCommit(false);
 
+      try (PreparedStatement userPs = conn.prepareStatement(
+              "DELETE FROM \"user\" WHERE id = ?");
+           PreparedStatement authorityPs = conn.prepareStatement(
+                   "DELETE FROM \"authority\" WHERE user_id = ?")
+      ) {
+        authorityPs.setObject(1, id);
+        authorityPs.executeUpdate();
+
+        userPs.setObject(1, id);
+        userPs.executeUpdate();
+
+        conn.commit();
+      } catch (Exception e) {
+        conn.rollback();
+        throw e;
+      } finally {
+        conn.setAutoCommit(true);
+      }
+
+    } catch (SQLException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   @Override
   public void deleteInUserdataById(UUID id) {
+    try (Connection conn = udDs.getConnection()) {
+      try (PreparedStatement ps = conn.prepareStatement(
+              "DELETE FROM \"user\" where id = ?")) {
+        ps.setObject(1, id);
+        ps.executeUpdate();
+      }
+    } catch (SQLException e) {
+      throw new RuntimeException(e);
+    }
+  }
 
+  @Override
+  public UserAuthEntity getFromAuthById(UUID id) {
+    UserAuthEntity userAuthEntity;
+    try (Connection conn = authDs.getConnection()) {
+      try (PreparedStatement userPs = conn.prepareStatement(
+              "SELECT FROM \"user\" WHERE id = ?")) {
+        userPs.setObject(1, id);
+        userPs.executeUpdate();
+
+        try (ResultSet keys = userPs.getResultSet()) {
+          if (keys.next()) {
+            userAuthEntity = UserAuthEntity.builder()
+                    .id(UUID.fromString(keys.getString("id")))
+                    .username(keys.getString("username"))
+                    .password(keys.getString("password"))
+                    .enabled(keys.getBoolean("enabled"))
+                    .accountNonExpired(keys.getBoolean("account_non_expired"))
+                    .accountNonLocked(keys.getBoolean("account_non_locked"))
+                    .credentialsNonExpired(keys.getBoolean("credentials_non_expired"))
+                    .build();
+          } else {
+            throw new IllegalStateException("Can`t find id");
+          }
+        }
+      }
+    } catch (SQLException e) {
+      throw new RuntimeException(e);
+    }
+
+    return userAuthEntity;
+  }
+
+  @Override
+  public UserEntity getFromUserdataById(UUID id) {
+    UserEntity userEntity;
+    try (Connection conn = udDs.getConnection()) {
+      try (PreparedStatement ps = conn.prepareStatement(
+              "SELECT FROM \"user\" where id = ?")) {
+        ps.setObject(1, id);
+        ps.executeUpdate();
+
+        try (ResultSet keys = ps.getResultSet()) {
+          if (keys.next()) {
+            userEntity = UserEntity.builder()
+                    .id(UUID.fromString(keys.getString("id")))
+                    .username(keys.getString("username"))
+                    .currency(keys.getObject("currency", CurrencyValues.class))
+                    .build();
+          } else {
+            throw new IllegalStateException("Can`t find id");
+          }
+        }
+
+      }
+    } catch (SQLException e) {
+      throw new RuntimeException(e);
+    }
+
+    return userEntity;
+  }
+
+  @Override
+  public UserAuthEntity updateInAuth(UserAuthEntity user) {
+    UserAuthEntity userAuthEntity;
+    try (Connection conn = authDs.getConnection()) {
+      conn.setAutoCommit(false);
+
+      try (PreparedStatement userPs = conn.prepareStatement(
+              "UPDATE \"user\" " +
+                      "SET username = ?, password = ?, enabled = ?, account_non_expired = ?, account_non_locked = ?, " +
+                      "credentials_non_expired = ? WHERE id = ?", PreparedStatement.RETURN_GENERATED_KEYS);
+
+           PreparedStatement authorityPs = conn.prepareStatement(
+                   "UPDATE \"authority\" SET authority = ? WHERE user_id = ?")
+      ) {
+
+        userPs.setString(1, user.getUsername());
+        userPs.setString(2, pe.encode(user.getPassword()));
+        userPs.setBoolean(3, user.getEnabled());
+        userPs.setBoolean(4, user.getAccountNonExpired());
+        userPs.setBoolean(5, user.getAccountNonLocked());
+        userPs.setBoolean(6, user.getCredentialsNonExpired());
+        userPs.setObject(7, user.getId());
+        userPs.executeUpdate();
+
+        try (ResultSet keys = userPs.getResultSet()) {
+          if (keys.next()) {
+            userAuthEntity = UserAuthEntity.builder()
+                    .id(UUID.fromString(keys.getString("id")))
+                    .username(keys.getString("username"))
+                    .password(keys.getString("password"))
+                    .enabled(keys.getBoolean("enabled"))
+                    .accountNonExpired(keys.getBoolean("account_non_expired"))
+                    .accountNonLocked(keys.getBoolean("account_non_locked"))
+                    .credentialsNonExpired(keys.getBoolean("credentials_non_expired"))
+                    .build();
+          } else {
+            throw new IllegalStateException("Can`t find id");
+          }
+        }
+
+        for (Authority authority : Authority.values()) {
+          authorityPs.setString(1, authority.name());
+          authorityPs.setObject(2, user.getId());
+          authorityPs.addBatch();
+          authorityPs.clearParameters();
+        }
+
+        authorityPs.executeBatch();
+        conn.commit();
+      } catch (Exception e) {
+        conn.rollback();
+        throw e;
+      } finally {
+        conn.setAutoCommit(true);
+      }
+
+    } catch (SQLException e) {
+      throw new RuntimeException(e);
+    }
+    return userAuthEntity;
+  }
+
+  @Override
+  public UserEntity updateInUserdata(UserEntity user) {
+    UserEntity userEntity;
+    try (Connection conn = udDs.getConnection()) {
+      try (PreparedStatement ps = conn.prepareStatement(
+              "UPDATE \"user\"" +
+                      "SET username = ?, currency = ? WHERE id = ?", PreparedStatement.RETURN_GENERATED_KEYS)) {
+        ps.setString(1, user.getUsername());
+        ps.setString(2, user.getCurrency().name());
+        ps.setObject(3, user.getId());
+        ps.executeUpdate();
+
+        try (ResultSet keys = ps.getResultSet()) {
+          if (keys.next()) {
+            userEntity = UserEntity.builder()
+                    .id(UUID.fromString(keys.getString("id")))
+                    .username(keys.getString("username"))
+                    .currency(keys.getObject("currency", CurrencyValues.class))
+                    .build();
+          } else {
+            throw new IllegalStateException("Can`t find id");
+          }
+        }
+      }
+    } catch (SQLException e) {
+      throw new RuntimeException(e);
+    }
+    return userEntity;
   }
 }
