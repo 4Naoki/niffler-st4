@@ -2,6 +2,7 @@ package guru.qa.niffler.test;
 
 import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
+
 import guru.qa.niffler.jupiter.GenerateCategory;
 import guru.qa.niffler.jupiter.GenerateSpend;
 import guru.qa.niffler.model.CurrencyValues;
@@ -40,5 +41,4 @@ public class SpendingTest {
                 .deleteSelectedElements()
                 .spendingsTableShouldBeEmpty();
     }
-
 }
