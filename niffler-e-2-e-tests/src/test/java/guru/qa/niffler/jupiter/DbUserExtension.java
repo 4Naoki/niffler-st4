@@ -16,11 +16,11 @@ public class DbUserExtension implements BeforeEachCallback, AfterTestExecutionCa
     public static final ExtensionContext.Namespace NAMESPACE
             = ExtensionContext.Namespace.create(DbUserExtension.class);
 
-    private Faker faker = new Faker();
+    private final Faker faker = new Faker();
     private final UserRepository userRepository = new UserRepositoryJdbc();
 
     @Override
-    public void beforeEach(ExtensionContext extensionContext) throws Exception {
+    public void beforeEach(ExtensionContext extensionContext) {
         Optional<DbUser> dbUser = AnnotationSupport.findAnnotation(
                 extensionContext.getRequiredTestMethod(),
                 DbUser.class
@@ -68,7 +68,7 @@ public class DbUserExtension implements BeforeEachCallback, AfterTestExecutionCa
     }
 
     @Override
-    public void afterTestExecution(ExtensionContext extensionContext) throws Exception {
+    public void afterTestExecution(ExtensionContext extensionContext) {
         Optional<DbUser> dbUser = AnnotationSupport.findAnnotation(
                 extensionContext.getRequiredTestMethod(),
                 DbUser.class
